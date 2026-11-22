@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<meta name="robots" content="noindex">
+<title>Check-in</title>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 0; background: #f4f5f7; color: #1d1d1f; }
+  .wrap { max-width: 520px; margin: auto; padding: 14px; }
+  input, button { font-size: 17px; padding: 13px; border-radius: 10px; border: 1px solid #ccc; width: 100%; margin-bottom: 10px; }
+  button { background: #111; color: #fff; border: 0; font-weight: 600; }
+  header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+  #contador { background: #e6f1fb; color: #0c447c; padding: 6px 12px; border-radius: 20px; font-weight: 700; }
+  .tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+  .tabs button { background: #fff; color: #111; border: 1px solid #bbb; margin: 0; }
+  .tabs button.on { background: #111; color: #fff; border-color: #111; }
+  .res { border-radius: 14px; padding: 16px; text-align: center; margin-bottom: 12px; min-height: 96px; }
+  .res .t { font-size: 24px; font-weight: 800; }
+  .res .n { font-size: 20px; margin-top: 4px; }
+  .res .d { font-size: 14px; margin-top: 4px; }
+  .neutral { background: #fff; border: 2px dashed #ccc; color: #555; }
+  .ok { background: #16a34a; color: #fff; }
+  .warn { background: #f59e0b; color: #111; }
+  .err { background: #dc2626; color: #fff; }
+  #reader { width: 100%; border-radius: 12px; overflow: hidden; background: #000; min-height: 40px; }
+  .item { background: #fff; border-radius: 10px; padding: 12px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+  .item small { color: #666; display: block; }
+  .item button { width: auto; margin: 0; padding: 10px 14px; font-size: 15px; }
+  .hecho { color: #16a34a; font-weight: 700; white-space: nowrap; }
+  .msg { color: #dc2626; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div id="login">
+    <h2>Check-in</h2>
+    <input id="pin" type="password" inputmode="numeric" placeholder="PIN">
+    <input id="staff" placeholder="Puerta o nombre (ej. Puerta 1)">
+    <button onclick="entrar()">Entrar</button>
+    <div id="loginMsg" class="msg"></div>
+  </div>
+
+  <div id="app" hidden>
+    <header><b id="puerta"></b><span id="contador">0 / 0</span></header>
+    <div class="tabs">
+      <button id="tQR" class="on" onclick="modo('qr')">Escanear QR</button>
+      <button id="tNom" onclick="modo('nom')">Buscar nombre</button>
+    </div>
+
+    <div id="resultado" class="res neutral"><div class="t">Listo</div><div class="d">Apunta la cámara al QR</div></div>
+
+    <div id="vQR"><div id="reader"></div></div>
+
+    <div id="vNom" hidden>
+      <input id="buscar" placeholder="Nombre o apellido (mín. 3 letras)" oninput="buscarDif()" autocomplete="off">
+      <div id="lista"></div>
+    </div>
+  </div>
+
+</div>
+<script>
+let PIN = '', STAFF = '', cam = null, ocupado = false, ultimo = '', ultimoT = 0, tB = null;
+const $ = id => document.getElementById(id);
+
+// ⬇️ Pega aquí la URL de la implementación de Google (termina en /exec)
+const API_URL = 'PEGA_AQUI_LA_URL_EXEC';
+
+const ACC = { api_info: 'info', api_registrar: 'registrar', api_buscar: 'buscar' };
+async function run(fn, pin, x, y) {
+  if (API_URL.indexOf('PEGA_AQUI') === 0) throw new Error('Falta configurar API_URL en index.html');
+  const body = { accion: ACC[fn], pin: pin };
+  if (fn === 'api_registrar') { body.codigo = x; body.staff = y; }
+  if (fn === 'api_buscar') body.q = x;
+  let res;
+  try { res = await fetch(API_URL, { method: 'POST', body: JSON.stringify(body) }); }
+  catch (e) { throw new Error('Sin conexión a internet'); }
+  const j = await res.json();
+  if (!j.ok) throw new Error(j.error || 'Error');
+  return j.data;
+}
+function esc(s) { const d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; }
+function pintar(r) { if (r) $('contador').textContent = r.adentro + ' / ' + r.registrados + ' adentro'; }
+function mostrar(cl, t, n, d) {
+  $('resultado').className = 'res ' + cl;
+  $('resultado').innerHTML = '<div class="t">' + esc(t) + '</div>' + (n ? '<div class="n">' + esc(n) + '</div>' : '') + (d ? '<div class="d">' + esc(d) + '</div>' : '');
+}
+function beep(f, ms) { try { const c = new (window.AudioContext || window.webkitAudioContext)(), o = c.createOscillator(); o.frequency.value = f; o.connect(c.destination); o.start(); setTimeout(() => { o.stop(); c.close(); }, ms || 180); } catch (e) {} }
+function vib(p) { try { navigator.vibrate && navigator.vibrate(p); } catch (e) {} }
+
+async function entrar() {
+  PIN = $('pin').value.trim(); STAFF = $('staff').value.trim() || 'staff';
+  $('loginMsg').textContent = 'Verificando…';
+  try {
+    pintar(await run('api_info', PIN));
+    $('puerta').textContent = STAFF;
+    $('login').hidden = true; $('app').hidden = false;
+    modo('qr');
+    setInterval(async () => { try { pintar(await run('api_info', PIN)); } catch (e) {} }, 30000);
+  } catch (e) { $('loginMsg').textContent = e.message || 'Error'; }
+}
+
+async function modo(m) {
+  $('tQR').className = m === 'qr' ? 'on' : ''; $('tNom').className = m === 'nom' ? 'on' : '';
+  $('vQR').hidden = m !== 'qr'; $('vNom').hidden = m !== 'nom';
+  if (m === 'qr') {
+    mostrar('neutral', 'Listo', '', 'Apunta la cámara al QR');
+    try {
+      cam = cam || new Html5Qrcode('reader');
+      if (!cam.isScanning) await cam.start({ facingMode: 'environment' }, { fps: 10, qrbox: { width: 230, height: 230 } }, leido);
+    } catch (e) { mostrar('err', 'No abrió la cámara', String(e && e.message || e), 'Usa "Buscar nombre"'); }
+  } else {
+    if (cam && cam.isScanning) { try { await cam.stop(); } catch (e) {} }
+    mostrar('neutral', 'Buscar por nombre', '', 'Escribe al menos 3 letras');
+    $('buscar').focus();
+  }
+}
+
+function leido(txt) {
+  const now = Date.now();
+  if (txt === ultimo && now - ultimoT < 5000) return;
+  ultimo = txt; ultimoT = now;
+  registrar(txt);
+}
+
+async function registrar(codigo) {
+  if (ocupado) return; ocupado = true;
+  mostrar('neutral', 'Verificando…');
+  try {
+    const r = await run('api_registrar', PIN, codigo, STAFF);
+    if (r.estado === 'OK') { mostrar('ok', 'ADELANTE', r.nombre, r.inst); beep(880); vib(150); }
+    else if (r.estado === 'YA_ENTRO') { mostrar('warn', 'YA ENTRÓ', r.nombre, r.entrada); beep(330, 400); vib([120, 80, 120]); }
+    else { mostrar('err', 'NO ENCONTRADO', '', 'Búscalo por nombre'); beep(200, 500); vib(400); }
+    pintar(r.resumen);
+    if (!$('vNom').hidden) buscar();
+  } catch (e) { mostrar('err', 'Sin conexión', e.message || '', 'Intenta de nuevo'); }
+  finally { ocupado = false; }
+}
+
+function buscarDif() { clearTimeout(tB); tB = setTimeout(buscar, 350); }
+async function buscar() {
+  const q = $('buscar').value.trim();
+  if (q.length < 3) { $('lista').innerHTML = ''; return; }
+  $('lista').innerHTML = '<div class="item">Buscando…</div>';
+  try {
+    const res = await run('api_buscar', PIN, q);
+    if (!res.length) { $('lista').innerHTML = '<div class="item">Sin resultados: no está en la lista.</div>'; return; }
+    $('lista').innerHTML = res.map(p =>
+      '<div class="item"><div><b>' + esc(p.nombre) + '</b><small>' + esc(p.inst) + '</small></div>' +
+      (p.entrada ? '<span class="hecho">✔ ' + esc(p.entrada.split(' · ')[0].split(' ')[1] || p.entrada) + '</span>'
+                 : '<button data-id="' + esc(p.id) + '">Registrar</button>') + '</div>').join('');
+    $('lista').querySelectorAll('button[data-id]').forEach(b => b.onclick = () => registrar(b.dataset.id));
+  } catch (e) { $('lista').innerHTML = '<div class="item msg">' + esc(e.message) + '</div>'; }
+}
+</script>
+</body>
+</html>

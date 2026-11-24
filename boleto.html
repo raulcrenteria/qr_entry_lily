@@ -7,10 +7,10 @@
 <title>Boleto de acceso · Más allá de las aulas</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
 <style>
-  body { margin: 0; background: #eceaf4; font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif; color: #1d1d1f; }
+  body { margin: 0; background: #f4ecef; font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif; color: #1d1d1f; }
   .wrap { max-width: 460px; margin: auto; padding: 16px; text-align: center; }
   img#boleto { width: 100%; border-radius: 18px; box-shadow: 0 6px 24px rgba(0,0,0,.12); background: #fff; }
-  button { width: 100%; font-size: 18px; font-weight: 700; padding: 15px; border: 0; border-radius: 12px; background: #4a3a8c; color: #fff; margin-top: 16px; }
+  button { width: 100%; font-size: 18px; font-weight: 700; padding: 15px; border: 0; border-radius: 12px; background: #9C2A4F; color: #fff; margin-top: 16px; }
   p { font-size: 14px; color: #555; line-height: 1.5; }
   .err { background: #fff; border-radius: 14px; padding: 24px; }
 </style>
@@ -28,7 +28,7 @@ const SUB = 'Los retos del docente cuando niñas, niños y adolescentes se encue
 const FECHA = 'Viernes 27 de noviembre de 2026';
 const HORA = '12:00 h · Acceso desde las 10:00 h';
 const LUGAR = 'Teatro de la Reforma · Calle Sexta 1212 esq. Abasolo, Zona Centro';
-const MORADO = '#4a3a8c';
+const MORADO = '#9C2A4F';  // guinda institucional
 
 const q = new URLSearchParams(location.search);
 const codigo = (q.get('c') || '').trim().toUpperCase();
@@ -46,11 +46,14 @@ function lineas(ctx, texto, ancho, max) {
   return out;
 }
 
-function dibujar() {
-  const W = 1080, H = 1720, cv = document.createElement('canvas');
+function dibujar(logo) {
+  const T = logo ? 190 : 0;  // franja del logo
+  const W = 1080, H = 1720 + T, cv = document.createElement('canvas');
   cv.width = W; cv.height = H;
   const x = cv.getContext('2d');
   x.fillStyle = '#ffffff'; x.fillRect(0, 0, W, H);
+  if (logo) { const lw = W - 120, lh = lw * logo.height / logo.width; x.drawImage(logo, 60, (T - lh) / 2, lw, lh); }
+  x.translate(0, T);
 
   // encabezado
   x.fillStyle = MORADO; x.fillRect(0, 0, W, 330);
@@ -87,14 +90,20 @@ function dibujar() {
   x.fillStyle = '#444'; x.font = '30px Arial';
   lineas(x, LUGAR, W - 120, 2).forEach((l, i) => x.fillText(l, W / 2, y + 180 + i * 40));
   x.fillStyle = '#888'; x.font = '26px Arial';
-  x.fillText('Personal e intransferible · Presenta este boleto en la entrada', W / 2, H - 40);
+  x.fillText('Personal e intransferible · Presenta este boleto en la entrada', W / 2, H - T - 40);
   return cv;
 }
 
 if (!/^EVT-[A-Z0-9]{6}$/.test(codigo) || !nombre) {
   document.getElementById('error').hidden = false;
 } else {
-  const cv = dibujar();
+  const logo = new Image();
+  logo.onload = () => mostrar(dibujar(logo));
+  logo.onerror = () => mostrar(dibujar(null));
+  logo.src = 'logo_sec.png';
+}
+
+function mostrar(cv) {
   const img = document.getElementById('boleto');
   img.src = cv.toDataURL('image/png'); img.hidden = false;
   document.getElementById('ayuda').hidden = false;

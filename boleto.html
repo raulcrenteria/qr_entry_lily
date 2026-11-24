@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Boleto de acceso · Más allá de las aulas</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+<style>
+  body { margin: 0; background: #eceaf4; font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif; color: #1d1d1f; }
+  .wrap { max-width: 460px; margin: auto; padding: 16px; text-align: center; }
+  img#boleto { width: 100%; border-radius: 18px; box-shadow: 0 6px 24px rgba(0,0,0,.12); background: #fff; }
+  button { width: 100%; font-size: 18px; font-weight: 700; padding: 15px; border: 0; border-radius: 12px; background: #4a3a8c; color: #fff; margin-top: 16px; }
+  p { font-size: 14px; color: #555; line-height: 1.5; }
+  .err { background: #fff; border-radius: 14px; padding: 24px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <img id="boleto" alt="Boleto de acceso" hidden>
+  <button id="guardar" hidden>Guardar boleto</button>
+  <p id="ayuda" hidden>Si el botón no funciona: deja presionada la imagen → <b>Guardar imagen</b>, o toma captura de pantalla.<br>Muéstrala en la entrada del Teatro de la Reforma.</p>
+  <div id="error" class="err" hidden>Este enlace no es válido. Si no tienes tu boleto, en la entrada te buscamos por nombre.</div>
+</div>
+<script>
+const EVENTO = 'Más allá de las aulas';
+const SUB = 'Los retos del docente cuando niñas, niños y adolescentes se encuentran en conflicto con la ley';
+const FECHA = 'Viernes 27 de noviembre de 2026';
+const HORA = '12:00 h · Acceso desde las 10:00 h';
+const LUGAR = 'Teatro de la Reforma · Calle Sexta 1212 esq. Abasolo, Zona Centro';
+const MORADO = '#4a3a8c';
+
+const q = new URLSearchParams(location.search);
+const codigo = (q.get('c') || '').trim().toUpperCase();
+const nombre = (q.get('n') || '').trim().slice(0, 90);
+
+function lineas(ctx, texto, ancho, max) {
+  const out = []; let act = '';
+  for (const p of texto.split(/\s+/)) {
+    const prueba = act ? act + ' ' + p : p;
+    if (ctx.measureText(prueba).width <= ancho) act = prueba;
+    else { if (act) out.push(act); act = p; }
+  }
+  if (act) out.push(act);
+  if (out.length > max) { out.length = max; out[max - 1] += '…'; }
+  return out;
+}
+
+function dibujar() {
+  const W = 1080, H = 1720, cv = document.createElement('canvas');
+  cv.width = W; cv.height = H;
+  const x = cv.getContext('2d');
+  x.fillStyle = '#ffffff'; x.fillRect(0, 0, W, H);
+
+  // encabezado
+  x.fillStyle = MORADO; x.fillRect(0, 0, W, 330);
+  x.fillStyle = '#ffffff'; x.textAlign = 'center';
+  x.font = '600 34px Arial'; x.fillText('BOLETO DE ACCESO · CONFERENCIA', W / 2, 80);
+  x.font = 'bold 76px Arial'; x.fillText(EVENTO.toUpperCase(), W / 2, 175);
+  x.font = '30px Arial';
+  lineas(x, SUB, W - 140, 2).forEach((l, i) => x.fillText(l, W / 2, 232 + i * 40));
+
+  // nombre
+  x.fillStyle = '#666'; x.font = '30px Arial'; x.fillText('Asistente', W / 2, 410);
+  x.fillStyle = '#111'; x.font = 'bold 54px Arial';
+  const nl = lineas(x, nombre, W - 120, 2);
+  nl.forEach((l, i) => x.fillText(l, W / 2, 478 + i * 64));
+
+  // QR
+  const qr = qrcode(0, 'M'); qr.addData(codigo); qr.make();
+  const n = qr.getModuleCount(), lado = 560, cel = Math.floor(lado / n), real = cel * n;
+  const qx = (W - real) / 2, qy = 600 + (nl.length - 1) * 40;
+  x.fillStyle = '#fff'; x.fillRect(qx - 30, qy - 30, real + 60, real + 60);
+  x.fillStyle = '#000';
+  for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) if (qr.isDark(r, c)) x.fillRect(qx + c * cel, qy + r * cel, cel, cel);
+
+  // código
+  let y = qy + real + 95;
+  x.fillStyle = '#111'; x.font = 'bold 64px Arial'; x.fillText(codigo, W / 2, y);
+
+  // datos del evento
+  y += 60;
+  x.strokeStyle = '#ddd'; x.setLineDash([14, 12]); x.lineWidth = 3;
+  x.beginPath(); x.moveTo(60, y); x.lineTo(W - 60, y); x.stroke(); x.setLineDash([]);
+  x.fillStyle = '#111'; x.font = 'bold 38px Arial'; x.fillText(FECHA, W / 2, y + 70);
+  x.font = '34px Arial'; x.fillText(HORA, W / 2, y + 122);
+  x.fillStyle = '#444'; x.font = '30px Arial';
+  lineas(x, LUGAR, W - 120, 2).forEach((l, i) => x.fillText(l, W / 2, y + 180 + i * 40));
+  x.fillStyle = '#888'; x.font = '26px Arial';
+  x.fillText('Personal e intransferible · Presenta este boleto en la entrada', W / 2, H - 40);
+  return cv;
+}
+
+if (!/^EVT-[A-Z0-9]{6}$/.test(codigo) || !nombre) {
+  document.getElementById('error').hidden = false;
+} else {
+  const cv = dibujar();
+  const img = document.getElementById('boleto');
+  img.src = cv.toDataURL('image/png'); img.hidden = false;
+  document.getElementById('ayuda').hidden = false;
+  const btn = document.getElementById('guardar'); btn.hidden = false;
+  btn.onclick = () => cv.toBlob(async blob => {
+    const archivo = new File([blob], 'Boleto_' + codigo + '.png', { type: 'image/png' });
+    if (navigator.canShare && navigator.canShare({ files: [archivo] })) {
+      try { await navigator.share({ files: [archivo], title: 'Boleto ' + codigo }); return; } catch (e) { if (e.name === 'AbortError') return; }
+    }
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = archivo.name;
+    document.body.appendChild(a); a.click(); a.remove();
+  }, 'image/png');
+}
+</script>
+</body>
+</html>

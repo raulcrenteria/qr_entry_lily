@@ -2,3 +2,4 @@ apps-script/
 .DS_Store
 *.csv
 *.xlsx
+envio/

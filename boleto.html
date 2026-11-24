@@ -31,8 +31,16 @@ const LUGAR = 'Teatro de la Reforma · Calle Sexta 1212 esq. Abasolo, Zona Centr
 const MORADO = '#9C2A4F';  // guinda institucional
 
 const q = new URLSearchParams(location.search);
-const codigo = (q.get('c') || '').trim().toUpperCase();
-const nombre = (q.get('n') || '').trim().slice(0, 90);
+const codigo = (((q.get('c') || '') + ' ' + decodeURIComponent(location.search) + ' ' + location.hash).toUpperCase().match(/EVT-[A-Z0-9]{6}/) || [''])[0];
+function nombreB64() {  // formato Android-seguro: c=EVT-XXXXXX.<nombre en base64url>
+  const m = ((q.get('c') || '') + location.hash).match(/EVT-[A-Za-z0-9]{6}\.([A-Za-z0-9_-]+)/);
+  if (!m) return '';
+  try {
+    const b = atob(m[1].replace(/-/g, '+').replace(/_/g, '/'));
+    return new TextDecoder().decode(Uint8Array.from(b, ch => ch.charCodeAt(0)));
+  } catch (e) { return ''; }
+}
+const nombre = ((q.get('n') || '').trim() || nombreB64()).slice(0, 90);
 
 function lineas(ctx, texto, ancho, max) {
   const out = []; let act = '';
@@ -64,9 +72,9 @@ function dibujar(logo) {
   lineas(x, SUB, W - 140, 2).forEach((l, i) => x.fillText(l, W / 2, 232 + i * 40));
 
   // nombre
-  x.fillStyle = '#666'; x.font = '30px Arial'; x.fillText('Asistente', W / 2, 410);
+  x.fillStyle = '#666'; x.font = '30px Arial'; x.fillText(nombre ? 'Asistente' : 'Boleto personal', W / 2, 410);
   x.fillStyle = '#111'; x.font = 'bold 54px Arial';
-  const nl = lineas(x, nombre, W - 120, 2);
+  const nl = nombre ? lineas(x, nombre, W - 120, 2) : [''];
   nl.forEach((l, i) => x.fillText(l, W / 2, 478 + i * 64));
 
   // QR
@@ -94,7 +102,7 @@ function dibujar(logo) {
   return cv;
 }
 
-if (!/^EVT-[A-Z0-9]{6}$/.test(codigo) || !nombre) {
+if (!codigo) {
   document.getElementById('error').hidden = false;
 } else {
   const logo = new Image();

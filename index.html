@@ -99,9 +99,10 @@ async function entrar() {
     pintar(await run('api_info', PIN));
     $('puerta').textContent = STAFF;
     $('login').hidden = true; $('app').hidden = false;
+    try { localStorage.setItem('sesion', JSON.stringify({ pin: PIN, staff: STAFF, t: Date.now() })); } catch (x) {}
     modo('qr');
     setInterval(async () => { try { pintar(await run('api_info', PIN)); } catch (e) {} }, 30000);
-  } catch (e) { $('loginMsg').textContent = e.message || 'Error'; }
+  } catch (e) { $('loginMsg').textContent = e.message || 'Error'; try { localStorage.removeItem('sesion'); } catch (x) {} }
 }
 
 async function modo(m) {
@@ -156,6 +157,12 @@ async function buscar() {
     $('lista').querySelectorAll('button[data-id]').forEach(b => b.onclick = () => registrar(b.dataset.id));
   } catch (e) { $('lista').innerHTML = '<div class="item msg">' + esc(e.message) + '</div>'; }
 }
+(function () {
+  try {
+    const s = JSON.parse(localStorage.getItem('sesion') || 'null');
+    if (s && Date.now() - s.t < 14 * 3600 * 1000) { $('pin').value = s.pin; $('staff').value = s.staff; entrar(); }
+  } catch (e) {}
+})();
 </script>
 </body>
 </html>

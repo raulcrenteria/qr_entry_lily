@@ -31,6 +31,7 @@
   .item button { width: auto; margin: 0; padding: 10px 14px; font-size: 15px; }
   .hecho { color: #16a34a; font-weight: 700; white-space: nowrap; }
   .msg { color: #dc2626; }
+  #salir { width: auto; margin: 0 0 0 8px; padding: 4px 10px; font-size: 13px; background: #fff; color: #111; border: 1px solid #ccc; border-radius: 8px; }
 </style>
 </head>
 <body>
@@ -46,7 +47,7 @@
   </div>
 
   <div id="app" hidden>
-    <header><b id="puerta"></b><span id="contador">0 / 0</span></header>
+    <header><span><b id="puerta"></b><button id="salir" type="button" onclick="salir()">Salir</button></span><span id="contador">0 / 0</span></header>
     <div class="tabs">
       <button id="tQR" class="on" onclick="modo('qr')">Escanear QR</button>
       <button id="tNom" onclick="modo('nom')">Buscar nombre</button>
@@ -156,6 +157,11 @@ async function buscar() {
                  : '<button data-id="' + esc(p.id) + '">Registrar</button>') + '</div>').join('');
     $('lista').querySelectorAll('button[data-id]').forEach(b => b.onclick = () => registrar(b.dataset.id));
   } catch (e) { $('lista').innerHTML = '<div class="item msg">' + esc(e.message) + '</div>'; }
+}
+function salir() {
+  if (!confirm('¿Cerrar sesión de esta puerta?')) return;
+  try { localStorage.removeItem('sesion'); } catch (e) {}
+  location.reload();
 }
 (function () {
   try {
